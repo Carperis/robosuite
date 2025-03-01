@@ -1,4 +1,8 @@
 from mujoco import viewer
+import mujoco
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+from collections import deque
 
 DEFAULT_FREE_CAM = {
     "lookat": [0, 0, 1],
@@ -16,6 +20,7 @@ class MjviewerRenderer:
         self.camera_id = camera_id
         self.viewer = None
         self.camera_config = cam_config
+        self.texts = deque(maxlen=20)
 
     def render(self):
         pass
@@ -28,8 +33,8 @@ class MjviewerRenderer:
             self.viewer = viewer.launch_passive(
                 self.env.sim.model._model,
                 self.env.sim.data._data,
-                show_left_ui=False,
-                show_right_ui=False,
+                # show_left_ui=False,
+                # show_right_ui=False,
             )
 
             self.viewer.opt.geomgroup[0] = 0
@@ -47,7 +52,10 @@ class MjviewerRenderer:
                 else:
                     self.viewer.cam.type = 0
 
+        self._mjprint()
         self.viewer.sync()
+        if self.viewer is not None:
+            self.viewer.user_scn.ngeom = 0
 
     def reset(self):
         pass
@@ -61,3 +69,51 @@ class MjviewerRenderer:
 
     def add_keypress_callback(self, keypress_callback):
         self.keypress_callback = keypress_callback
+
+    def mjprint(self, text):
+        """Prints text to the viewer window."""
+        texts = text.split("\n")
+        self.texts.extend(texts)
+
+    def _mjprint(self):
+        """Prints text to the viewer window."""
+        if self.viewer is not None:
+            if self.env.render_camera:
+                # cam_configs = self.env._cam_configs
+                # curr_config = cam_configs[self.env.render_camera]
+                # cam_pos = curr_config["pos"]
+                # cam_quat = curr_config["quat"] # [w, x, y, z]
+                # cam_quat = np.array([cam_quat[1], cam_quat[2], cam_quat[3], cam_quat[0]]) # [x, y, z, w]
+                # cam_rot = R.from_quat(cam_quat).as_matrix()
+                # cam_base_quat = self.env.sim.data.get_body_xquat("mobilebase0_support") # [w, x, y, z]
+                # cam_base_quat = np.array([cam_base_quat[1], cam_base_quat[2], cam_base_quat[3], cam_base_quat[0]]) # [x, y, z, w]
+                # cam_base_rot = R.from_quat(cam_base_quat).as_matrix()
+
+                cam_rot = R.from_euler("xyz", [0, 0, 90], degrees=True).as_matrix()
+                shift = np.array([0, -0.1, 0.15], dtype=np.float64)  # right side
+                pos = self.env.sim.data.get_body_xpos("gripper0_right_eef") + cam_rot.dot(shift)
+                next_line = np.array([0, 0, -0.02], dtype=np.float64)
+            else:
+                cam_rot = R.from_euler("xyz", [0, -self.viewer.cam.elevation, self.viewer.cam.azimuth], degrees=True).as_matrix()
+                shift = np.array([0, -0.3, 0.3], dtype=np.float64) * self.viewer.cam.distance  # Top left corner
+                shift[0] = self.viewer.cam.distance
+                pos = self.viewer.cam.lookat + cam_rot.dot(shift)
+                next_line = np.array([0, 0, -0.03], dtype=np.float64) * self.viewer.cam.distance
+
+            for line in self.texts:
+                # Get the next available geom from the viewer's scene.
+                geom = self.viewer.user_scn.geoms[self.viewer.user_scn.ngeom]
+                mujoco.mjv_initGeom(
+                    geom,
+                    type=mujoco.mjtGeom.mjGEOM_LABEL,
+                    pos=pos,  # current text position (world frame)
+                    mat=cam_rot.flatten(),  # use the orientation for the label
+                    size=np.ones(3),
+                    rgba=np.zeros(4),
+                )
+                # Set the label text
+                geom.label = line
+                self.viewer.user_scn.ngeom += 1
+
+                # Update pos_i: transform a local offset into the world frame and add it
+                pos = pos + cam_rot.dot(next_line)
