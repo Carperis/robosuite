@@ -20,7 +20,9 @@ class MjviewerRenderer:
         self.camera_id = camera_id
         self.viewer = None
         self.camera_config = cam_config
+        
         self.texts = deque(maxlen=20)
+        self.auto_clean = False
 
     def render(self):
         pass
@@ -56,6 +58,8 @@ class MjviewerRenderer:
         self.viewer.sync()
         if self.viewer is not None:
             self.viewer.user_scn.ngeom = 0
+        if self.auto_clean:
+            self.texts.clear()
 
     def reset(self):
         pass
@@ -70,8 +74,9 @@ class MjviewerRenderer:
     def add_keypress_callback(self, keypress_callback):
         self.keypress_callback = keypress_callback
 
-    def mjprint(self, text):
+    def mjprint(self, text, auto_clean=False):
         """Prints text to the viewer window."""
+        self.auto_clean = auto_clean
         texts = text.split("\n")
         self.texts.extend(texts)
 
