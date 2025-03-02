@@ -35,8 +35,8 @@ class MjviewerRenderer:
             self.viewer = viewer.launch_passive(
                 self.env.sim.model._model,
                 self.env.sim.data._data,
-                # show_left_ui=False,
-                # show_right_ui=False,
+                show_left_ui=False,
+                show_right_ui=False,
             )
 
             self.viewer.opt.geomgroup[0] = 0
@@ -95,7 +95,7 @@ class MjviewerRenderer:
                 # cam_base_rot = R.from_quat(cam_base_quat).as_matrix()
 
                 cam_rot = R.from_euler("xyz", [0, 0, 90], degrees=True).as_matrix()
-                shift = np.array([0, -0.1, 0.15], dtype=np.float64)  # right side
+                shift = np.array([0, -0.0, 0.0], dtype=np.float64)  # right side
                 pos = self.env.sim.data.get_body_xpos("gripper0_right_eef") + cam_rot.dot(shift)
                 next_line = np.array([0, 0, -0.02], dtype=np.float64)
             else:
