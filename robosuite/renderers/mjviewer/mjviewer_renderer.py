@@ -135,7 +135,7 @@ class MjviewerRenderer:
                 # Update pos_i: transform a local offset into the world frame and add it
                 pos = pos + cam_rot.dot(next_line)
 
-    def mjshowframe(self, xyz, quat, size=0.1, name=None, keep=False):
+    def mjshowframe(self, xyz, quat=(1,0,0,0), size=0.1, name=None, keep=False):
         """
         Queue a coordinate frame at world-frame `xyz` with quaternion `quat` (x,y,z,w).
         Will be drawn on the next update().
