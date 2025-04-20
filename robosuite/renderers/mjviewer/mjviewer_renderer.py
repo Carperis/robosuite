@@ -20,9 +20,12 @@ class MjviewerRenderer:
         self.camera_id = camera_id
         self.viewer = None
         self.camera_config = cam_config
-        
+
         self.texts = deque(maxlen=20)
-        self.auto_clean = False
+        self.max_frames = 20
+        self.frames = []
+        self.frames_to_keep = set()
+        self.text_auto_clean = False
 
     def render(self):
         pass
@@ -54,12 +57,21 @@ class MjviewerRenderer:
                 else:
                     self.viewer.cam.type = 0
 
-        self._mjprint()
-        self.viewer.sync()
         if self.viewer is not None:
             self.viewer.user_scn.ngeom = 0
-        if self.auto_clean:
+        self._mjprint()
+        self._mjshowframe()
+        self.viewer.sync()
+        if self.text_auto_clean:
             self.texts.clear()
+            
+        indices_to_remove = []
+        for i, frame in enumerate(self.frames):
+            if frame[3] is not None and frame[3] not in self.frames_to_keep or len(self.frames) > self.max_frames:
+                indices_to_remove.append(i)
+        for i in reversed(indices_to_remove):
+            del self.frames[i]
+            
 
     def reset(self):
         pass
@@ -76,7 +88,7 @@ class MjviewerRenderer:
 
     def mjprint(self, text, auto_clean=False):
         """Prints text to the viewer window."""
-        self.auto_clean = auto_clean
+        self.text_auto_clean = auto_clean
         texts = text.split("\n")
         self.texts.extend(texts)
 
@@ -122,3 +134,46 @@ class MjviewerRenderer:
 
                 # Update pos_i: transform a local offset into the world frame and add it
                 pos = pos + cam_rot.dot(next_line)
+
+    def mjshowframe(self, xyz, quat=(1,0,0,0), size=0.1, name=None, keep=False):
+        """
+        Queue a coordinate frame at world-frame `xyz` with quaternion `quat` (x,y,z,w).
+        Will be drawn on the next update().
+        """
+        if keep and name is not None:
+            self.frames_to_keep.add(name)
+        elif not keep and name in self.frames_to_keep:
+            self.frames_to_keep.remove(name)
+        self.frames.append((np.array(xyz, dtype=float), np.array(quat, dtype=float), float(size), name))
+
+    def _mjshowframe(self):
+        if self.viewer is not None:
+            # draw each queued frame as three colored arrows
+            for pos, quat, size, name in self.frames:
+                # (x,y,z,w) → rotation matrix
+                mat3 = R.from_quat(quat).as_matrix()
+                flat = mat3.flatten()
+
+                for axis, color in enumerate([[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1]]):
+                    geom = self.viewer.user_scn.geoms[self.viewer.user_scn.ngeom]
+                    mujoco.mjv_initGeom(
+                        geom,
+                        type=mujoco.mjtGeom.mjGEOM_ARROW,
+                        pos=pos,
+                        mat=flat,
+                        size=[0.003, 0.003, size],
+                        rgba=color,
+                    )
+                    # adjust orientation for X and Y arrows
+                    if axis == 0:  # X axis: rotate -90° about Y
+                        extra = R.from_euler("y", -90, degrees=True).as_matrix()
+                        new_flat = (mat3 @ extra).flatten()
+                        geom.mat[:, :] = new_flat.reshape(3, 3)
+                    elif axis == 1:  # Y axis: rotate +90° about X
+                        extra = R.from_euler("x", 90, degrees=True).as_matrix()
+                        new_flat = (mat3 @ extra).flatten()
+                        geom.mat[:, :] = new_flat.reshape(3, 3)
+                    # Z axis uses flat as set
+                    if name:
+                        geom.label = name
+                    self.viewer.user_scn.ngeom += 1
