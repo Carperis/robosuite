@@ -166,11 +166,11 @@ class MjviewerRenderer:
                     )
                     # adjust orientation for X and Y arrows
                     if axis == 0:  # X axis: rotate -90° about Y
-                        extra = R.from_euler("y", -90, degrees=True).as_matrix()
+                        extra = R.from_euler("y", 90, degrees=True).as_matrix()
                         new_flat = (mat3 @ extra).flatten()
                         geom.mat[:, :] = new_flat.reshape(3, 3)
                     elif axis == 1:  # Y axis: rotate +90° about X
-                        extra = R.from_euler("x", 90, degrees=True).as_matrix()
+                        extra = R.from_euler("x", -90, degrees=True).as_matrix()
                         new_flat = (mat3 @ extra).flatten()
                         geom.mat[:, :] = new_flat.reshape(3, 3)
                     # Z axis uses flat as set
