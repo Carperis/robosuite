@@ -26,6 +26,7 @@ class MjviewerRenderer:
         self.frames = []
         self.frames_to_keep = set()
         self.text_auto_clean = False
+        self.ellipses = deque(maxlen=20)
 
     def render(self):
         pass
@@ -61,17 +62,18 @@ class MjviewerRenderer:
             self.viewer.user_scn.ngeom = 0
         self._mjprint()
         self._mjshowframe()
+        self._mjshowellipse()
         self.viewer.sync()
         if self.text_auto_clean:
             self.texts.clear()
-            
+
+        self.ellipses.clear()
         indices_to_remove = []
         for i, frame in enumerate(self.frames):
             if frame[3] is not None and frame[3] not in self.frames_to_keep or len(self.frames) > self.max_frames:
                 indices_to_remove.append(i)
         for i in reversed(indices_to_remove):
             del self.frames[i]
-            
 
     def reset(self):
         pass
@@ -177,3 +179,30 @@ class MjviewerRenderer:
                     if name:
                         geom.label = name
                     self.viewer.user_scn.ngeom += 1
+
+    def mjshowellipse(self, xyz, quat=(1,0,0,0), size=(0.1, 0.1, 0.1), color=(1, 0, 0), alpha=0.5, name=None):
+        """
+        Queue an ellipse at world-frame `xyz` with quaternion `quat` (x,y,z,w).
+        Will be drawn on the next update().
+        """
+        self.ellipses.append((np.array(xyz, dtype=float), np.array(quat, dtype=float), np.array(size, dtype=float), np.array(color, dtype=float), float(alpha), name))
+    
+    def _mjshowellipse(self):
+        if self.viewer is not None:
+            for pos, quat, size, color, alpha, name in self.ellipses:
+                # (x,y,z,w) → rotation matrix
+                mat3 = R.from_quat(quat).as_matrix()
+                flat = mat3.flatten()
+
+                geom = self.viewer.user_scn.geoms[self.viewer.user_scn.ngeom]
+                mujoco.mjv_initGeom(
+                    geom,
+                    type=mujoco.mjtGeom.mjGEOM_ELLIPSOID,
+                    pos=pos,
+                    mat=flat,
+                    size=size,
+                    rgba=[color[0], color[1], color[2], alpha],  # Use provided alpha
+                )
+                if name:
+                    geom.label = name
+                self.viewer.user_scn.ngeom += 1
